@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KMIT Marks Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f7f9fb; }
+    .container { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .note { font-size: 0.9rem; color: #6b7280; }
+    .error-box { background: #fff7f7; border: 1px solid #fecaca; color: #9f1239; padding: 12px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="container p-4">
+  <div id="app-container" class="w-full max-w-3xl bg-white shadow-xl rounded-2xl p-8 transition-all duration-300">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">KMIT Marks Portal</h1>
+    <div id="auth-status" class="text-center"></div>
+    <div id="debug" class="mt-4 text-left text-xs note"></div>
+  </div>
+</div>
+
+<script type="module">
+// Robust index.html with popup fallback to redirect for Google Sign-in
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { 
+  getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+setLogLevel('Debug');
+
+// ----- Firebase config (user-provided) -----
+const firebaseConfig = {
+  apiKey: "AIzaSyC1Aa_mnq_0g7ZEuLbYVjN62iCMWemlKUc",
+  authDomain: "kmit-marks-portal-9db76.firebaseapp.com",
+  projectId: "kmit-marks-portal-9db76",
+  storageBucket: "kmit-marks-portal-9db76.firebasestorage.app",
+  messagingSenderId: "264909025742",
+  appId: "1:264909025742:web:84de5216860219e6bc3b9f",
+  measurementId: "G-JMZ564P8PJ"
+};
+
+const appId = 'kmit-marks-portal';
+let app, db, auth;
+let userId = null, userRole = null, isAuthReady = false, roleUnsubscribe = null;
+let roleAccessError = null; // NEW: store permission errors when reading role
+
+// Configure Google provider
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
+
+function debug(msg) {
+  const el = document.getElementById('debug');
+  if (!el) return;
+  const p = document.createElement('div');
+  p.textContent = msg;
+  el.appendChild(p);
+}
+
+function showErrorToUser(title, message, details) {
+  const status = document.getElementById('auth-status');
+  status.innerHTML = `
+    <div class="error-box">
+      <strong>${title}</strong>
+      <div>${message}</div>
+      ${details ? `<pre style="white-space:pre-wrap;margin-top:8px;background:#fff;padding:8px;border-radius:6px;">${details}</pre>` : ''}
+      <div class="note" style="margin-top:8px">Check Firebase Console → Authentication → Sign-in method → enable Google and add your origin to authorized domains. Also ensure you open the page via http(s) or localhost (not file:///).</div>
+    </div>
+  `;
+}
+
+// Safe initialization
+try {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  auth = getAuth(app);
+  debug('Firebase initialized.');
+} catch (err) {
+  console.error('Firebase init error', err);
+  showErrorToUser('Initialization error', 'Failed to initialize Firebase. See console for details.', String(err));
+  throw err;
+}
+
+async function attemptPopupSignIn() {
+  try {
+    await signInWithPopup(auth, provider);
+    return true;
+  } catch (err) {
+    debug('signInWithPopup error: ' + (err?.code || err?.message || err));
+    // If popup blocked or unavailable, fallback to redirect
+    const code = err?.code || '';
+    if (code.includes('popup-blocked') || code.includes('popup-closed-by-user') || code.includes('web-storage-unsupported') ) {
+      debug('Falling back to signInWithRedirect due to popup issue.');
+      try {
+        await signInWithRedirect(auth, provider);
+        return true; // redirect will navigate away
+      } catch (rerr) {
+        debug('signInWithRedirect failed: ' + (rerr?.message || rerr));
+        showErrorToUser('Google Sign-in failed', 'Both popup and redirect sign-in failed. Check console and Firebase configuration.', String(rerr));
+        return false;
+      }
+    } else {
+      // Other errors (e.g., network, config) — show helpful message
+      showErrorToUser('Google Sign-in failed', 'Unable to sign in with Google. Please check configuration and console for details.', `${err?.code || ''} ${err?.message || ''}`);
+      return false;
+    }
+  }
+}
+
+async function handleGoogleSignIn() {
+  // Try popup first; if blocked, fallback to redirect which avoids popup-blocking in many browsers
+  await attemptPopupSignIn();
+}
+
+async function handleSignOut() {
+  try {
+    if (roleUnsubscribe) roleUnsubscribe();
+    await signOut(auth);
+  } catch (err) {
+    console.error('Sign-out error', err);
+    debug('Sign-out error: ' + (err?.message || err));
+  }
+}
+
+function fetchUserRole(uid) {
+  roleAccessError = null; // reset
+  if (roleUnsubscribe) roleUnsubscribe();
+  try {
+    const roleDocRef = doc(db, 'artifacts', appId, 'users', uid, 'user_config', 'role');
+    roleUnsubscribe = onSnapshot(roleDocRef, (docSnap) => {
+      try {
+        if (docSnap.exists()) {
+          userRole = String(docSnap.data().role || '').toUpperCase();
+          roleAccessError = null;
+        } else {
+          userRole = null;
+        }
+      } catch (e) {
+        // defensive
+        console.error('Error reading docSnap', e);
+        userRole = null;
+      }
+      renderApp();
+    }, (err) => {
+      console.error('Role listener error', err);
+      debug('Role listener error: ' + (err?.message || err));
+      // Capture permission denied or other firestore errors
+      roleAccessError = err?.message || String(err);
+      userRole = null;
+      renderApp();
+    });
+  } catch (err) {
+    console.error('fetchUserRole error', err);
+    debug('fetchUserRole error: ' + (err?.message || err));
+    roleAccessError = err?.message || String(err);
+    userRole = null;
+    renderApp();
+  }
+}
+
+function safeSetInnerHTML(el, html) { el.innerHTML = html; }
+
+function renderApp() {
+  const statusDiv = document.getElementById('auth-status');
+
+  if (!isAuthReady) {
+    safeSetInnerHTML(statusDiv, `
+      <div class="flex flex-col items-center space-y-4">
+        <svg class="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        <p class="text-gray-600">Loading...</p>
+      </div>
+    `);
+    return;
+  }
+
+  if (!auth.currentUser) {
+    safeSetInnerHTML(statusDiv, `
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">Sign in to Continue</h2>
+      <button id="google-login" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Sign in with Google</button>
+      <div class="note mt-3">If sign-in fails: enable Google provider, set OAuth consent, add authorized domain, and run from http(s) or localhost (not file:///).</div>
+    `);
+    const btn = document.getElementById('google-login');
+    if (btn) btn.addEventListener('click', handleGoogleSignIn);
+    return;
+  }
+
+  // If we encountered a permission/read error while fetching the role - show actionable message
+  if (roleAccessError) {
+    safeSetInnerHTML(statusDiv, `
+      <div class="error-box">
+        <strong>Role access denied</strong>
+        <div>The application authenticated as <code>${auth.currentUser.email}</code> (UID: <code>${auth.currentUser.uid}</code>) but failed to read the role document due to a Firestore permission error.</div>
+        <div style="margin-top:8px">Full path attempted:</div>
+        <pre style="background:#fff;padding:8px;border-radius:6px;margin-top:6px;">artifacts/${appId}/users/${auth.currentUser.uid}/user_config/role</pre>
+        <div style="margin-top:8px">Error details:</div>
+        <pre style="background:#fff;padding:8px;border-radius:6px;margin-top:6px;">${roleAccessError}</pre>
+        <div class="note" style="margin-top:8px">Fix: In Firebase Console → Firestore → Rules, add a rule allowing this user to read their role document. Example rule:
+        <pre style="background:#fff;padding:8px;border-radius:6px;margin-top:6px;">match /artifacts/{appId}/users/{userId}/user_config/role { allow read: if request.auth != null &amp;&amp; request.auth.uid == userId; }</pre>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  if (!userRole) {
+    safeSetInnerHTML(statusDiv, `
+      <p class="text-lg text-gray-700">Authenticated as ${auth.currentUser.email}</p>
+      <p class="text-sm text-gray-500 mt-2">Checking role in Firestore...</p>
+      <div class="note mt-2">If role document is missing, create: <code>artifacts/${appId}/users/${auth.currentUser.uid}/user_config/role</code> with field <code>role</code> = "ADMIN" or "FACULTY".</div>
+    `);
+    return;
+  }
+
+  safeSetInnerHTML(statusDiv, `
+    <h2 class="text-2xl font-semibold text-green-700">Welcome, ${userRole}!</h2>
+    <p class="text-gray-600 mt-2">User: ${auth.currentUser.email}</p>
+    <div class="mt-4 p-4 bg-gray-50 border rounded-xl text-left">
+      ${userRole === 'ADMIN' ? '<p class="font-semibold text-indigo-700">Admin Access</p><p class="text-sm text-gray-600">Full control over marks & faculty tools.</p>' : ''}
+      ${userRole === 'FACULTY' ? '<p class="font-semibold text-blue-700">Faculty Access</p><p class="text-sm text-gray-600">You can enter & update marks.</p>' : ''}
+    </div>
+    <div class="mt-4 flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0">
+      <button id="proceed-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Proceed</button>
+      <button id="sign-out-btn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Sign Out</button>
+    </div>
+  `);
+
+  const signOutBtn = document.getElementById('sign-out-btn');
+  const proceedBtn = document.getElementById('proceed-btn');
+  if (signOutBtn) signOutBtn.addEventListener('click', handleSignOut);
+  if (proceedBtn) proceedBtn.addEventListener('click', () => {
+    if (userRole === 'ADMIN') window.location.href = 'admin.html';
+    else if (userRole === 'FACULTY') window.location.href = 'faculty.html';
+    else alert('No dashboard available for your role.');
+  });
+}
+
+// Process possible redirect result (if signInWithRedirect was used)
+getRedirectResult(auth).then((result) => {
+  if (result && result.user) {
+    debug('Redirect sign-in result processed.');
+  }
+}).catch((err) => {
+  debug('getRedirectResult error: ' + (err?.message || err));
+});
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    userId = user.uid;
+    fetchUserRole(user.uid);
+  } else {
+    userId = null;
+    userRole = null;
+  }
+  if (!isAuthReady) isAuthReady = true;
+  renderApp();
+}, (err) => {
+  console.error('onAuthStateChanged error', err);
+  showErrorToUser('Auth listener error', 'Failed to listen to auth state changes. Check console for details.', err?.message || String(err));
+});
+
+// Initial render while waiting for auth
+renderApp();
+
+</script>
+
+</body>
+</html>
