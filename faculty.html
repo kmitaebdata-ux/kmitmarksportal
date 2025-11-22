@@ -13,6 +13,19 @@
     .sticky-header { position: sticky; top: 0; z-index: 10; }
     .scroll-table { max-height: 460px; overflow: auto; }
     th.sticky-col { position: sticky; left: 0; background: #f9fafb; z-index: 5; }
+
+    /* validation + absentees */
+    .cell-error {
+      background-color: #fee2e2; /* red-100 */
+      border-color: #b91c1c !important; /* red-700 */
+    }
+    .cell-absent {
+      background-color: #fef3c7; /* amber-100 */
+      color: #b45309; /* amber-700 */
+    }
+    .row-absent {
+      background-color: #fffbeb; /* amber-50 */
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -65,6 +78,9 @@
           <div>
             <div class="text-xs text-slate-500">Subject</div>
             <div id="ws-subject-title" class="text-sm font-semibold text-slate-800">–</div>
+            <span id="ws-locked-badge" class="mt-1 inline-flex items-center text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 hidden">
+              Final Submitted (Locked)
+            </span>
           </div>
           <div class="flex flex-wrap gap-4 text-[11px] text-slate-600">
             <div><span class="font-semibold">Reg:</span> <span id="ws-reg">–</span></div>
@@ -106,7 +122,7 @@
           <div id="student-load-status" class="text-[11px] text-slate-500 mt-1"></div>
         </div>
 
-        <!-- Export / print -->
+        <!-- Export / print / save / lock -->
         <div class="flex flex-wrap gap-2 text-xs">
           <button id="download-csv-btn" class="px-3 py-1.5 rounded border border-slate-300 hover:bg-slate-50">
             Download CSV
@@ -119,6 +135,9 @@
           </button>
           <button id="save-marks-btn" class="px-4 py-1.5 rounded bg-emerald-600 text-white hover:bg-emerald-700">
             Save Marks to Firestore
+          </button>
+          <button id="lock-marks-btn" class="px-4 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">
+            Submit Final (Lock)
           </button>
         </div>
       </div>
@@ -200,6 +219,7 @@
   const wsType = document.getElementById("ws-type");
   const wsExam = document.getElementById("ws-exam");
   const wsLastDate = document.getElementById("ws-last-date");
+  const wsLockedBadge = document.getElementById("ws-locked-badge");
 
   const studentCsvInput = document.getElementById("student-csv-input");
   const loadStudentsBtn = document.getElementById("load-students-btn");
@@ -209,8 +229,8 @@
   const downloadXlsxBtn = document.getElementById("download-xlsx-btn");
   const printBtn = document.getElementById("print-btn");
   const saveMarksBtn = document.getElementById("save-marks-btn");
+  const lockMarksBtn = document.getElementById("lock-marks-btn");
 
-  const marksTableWrapper = document.getElementById("marks-table-wrapper");
   const marksTableContainer = document.getElementById("marks-table-container");
   const noStudentsDiv = document.getElementById("no-students");
   const saveStatus = document.getElementById("save-status");
@@ -225,24 +245,31 @@
   let currentAssignment = null;
   let students = []; // loaded from CSV
   let dynamicColumns = []; // mark columns
-  let fixedColumns = ["S.No", "Hall Ticket No", "Name of the Student", "Section"];
+  let isLocked = false;
 
+  const fixedColumns = ["S.No", "Hall Ticket No", "Name of the Student", "Section"];
+
+  // THEORY template (aligned with your header)
   const theoryDefaultColumns = [
     "1a","1b","2a","2b","3a","3b","4a","4b","5a","5b",
     "Part-C (5 Marks)",
+    "Assignment",
     "Part-A Objective (10 Marks)",
     "Descriptive 15 Marks",
     "Total (40)",
-    "Remarks"
+    "Remarks (Numeric)",
+    "Remarks (In Words)"
   ];
 
+  // LAB template (kept simple)
   const labDefaultColumns = [
     "Experiment No",
     "Observation / Procedure",
     "Record",
     "Viva",
     "Internal (40)",
-    "Remarks"
+    "Remarks (Numeric)",
+    "Remarks (In Words)"
   ];
 
   // ---------- Helpers ----------
@@ -263,6 +290,16 @@
   }
 
   logoutBtn.addEventListener("click", handleLogout);
+
+  function isDeadlinePassed(dateStr) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return false;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    d.setHours(0,0,0,0);
+    return d < today;
+  }
 
   function renderSubjectCards() {
     if (!assignments.length) {
@@ -300,50 +337,7 @@
     });
   }
 
-  function selectAssignment(index) {
-    currentAssignment = assignments[index];
-    if (!currentAssignment) return;
-
-    noSubjectMessage.classList.add("hidden");
-    marksWorkspace.classList.remove("hidden");
-
-    // Fill header
-    wsSubjectTitle.textContent = `${currentAssignment.subjectName} (${currentAssignment.subjectCode})`;
-    wsReg.textContent = currentAssignment.reg;
-    wsBranch.textContent = currentAssignment.branch;
-    wsYearSem.textContent = `${currentAssignment.year} / ${currentAssignment.sem}`;
-    wsBatch.textContent = currentAssignment.batch || "-";
-    wsSection.textContent = currentAssignment.section || "ALL";
-    wsType.textContent = currentAssignment.type || "-";
-    wsExam.textContent = currentAssignment.exam || "NOT SET";
-
-    if (currentAssignment.lastSubmissionDate) {
-      wsLastDate.textContent = currentAssignment.lastSubmissionDate;
-      wsLastDate.classList.remove("bg-amber-100","text-amber-700");
-      wsLastDate.classList.add("bg-emerald-100","text-emerald-700");
-    } else {
-      wsLastDate.textContent = "Not set (Admin can add in faculty_subjects)";
-      wsLastDate.classList.remove("bg-emerald-100","text-emerald-700");
-      wsLastDate.classList.add("bg-amber-100","text-amber-700");
-    }
-
-    // Set columns based on type
-    dynamicColumns =
-      (currentAssignment.type || "THEORY") === "LAB"
-        ? [...labDefaultColumns]
-        : [...theoryDefaultColumns];
-
-    // Clear any previous table
-    students = [];
-    marksTableContainer.innerHTML = "";
-    marksTableContainer.classList.add("hidden");
-    noStudentsDiv.classList.remove("hidden");
-    studentLoadStatus.textContent =
-      "Subject selected. Now load a CSV with students to enter marks.";
-    saveStatus.textContent = "";
-  }
-
-  // ---------- Load faculty role & assignments ----------
+  // ---------- role & assignments ----------
   async function fetchRole(uid) {
     const roleRef = doc(db, "artifacts", appId, "users", uid, "user_config", "role");
     const snap = await getDoc(roleRef);
@@ -375,7 +369,64 @@
     return list;
   }
 
-  // ---------- Student CSV loading ----------
+  function selectAssignment(index) {
+    currentAssignment = assignments[index];
+    if (!currentAssignment) return;
+
+    noSubjectMessage.classList.add("hidden");
+    marksWorkspace.classList.remove("hidden");
+
+    // header
+    wsSubjectTitle.textContent = `${currentAssignment.subjectName} (${currentAssignment.subjectCode})`;
+    wsReg.textContent = currentAssignment.reg;
+    wsBranch.textContent = currentAssignment.branch;
+    wsYearSem.textContent = `${currentAssignment.year} / ${currentAssignment.sem}`;
+    wsBatch.textContent = currentAssignment.batch || "-";
+    wsSection.textContent = currentAssignment.section || "ALL";
+    wsType.textContent = currentAssignment.type || "-";
+    wsExam.textContent = currentAssignment.exam || "NOT SET";
+
+    wsLastDate.classList.remove(
+      "bg-emerald-100","text-emerald-700",
+      "bg-amber-100","text-amber-700",
+      "bg-red-100","text-red-700"
+    );
+
+    if (currentAssignment.lastSubmissionDate) {
+      const passed = isDeadlinePassed(currentAssignment.lastSubmissionDate);
+      if (passed) {
+        wsLastDate.textContent = `${currentAssignment.lastSubmissionDate} (Deadline passed)`;
+        wsLastDate.classList.add("bg-red-100","text-red-700");
+      } else {
+        wsLastDate.textContent = currentAssignment.lastSubmissionDate;
+        wsLastDate.classList.add("bg-emerald-100","text-emerald-700");
+      }
+    } else {
+      wsLastDate.textContent = "Not set (Admin can add in faculty_subjects)";
+      wsLastDate.classList.add("bg-amber-100","text-amber-700");
+    }
+
+    // template
+    dynamicColumns =
+      (currentAssignment.type || "THEORY") === "LAB"
+        ? [...labDefaultColumns]
+        : [...theoryDefaultColumns];
+
+    // reset table state
+    students = [];
+    isLocked = false;
+    marksTableContainer.innerHTML = "";
+    marksTableContainer.classList.add("hidden");
+    noStudentsDiv.classList.remove("hidden");
+    studentLoadStatus.textContent =
+      "Subject selected. Now load a CSV with students to enter marks.";
+    saveStatus.textContent = "";
+    wsLockedBadge.classList.add("hidden");
+    saveMarksBtn.disabled = false;
+    lockMarksBtn.disabled = false;
+  }
+
+  // ---------- CSV parsing / loading ----------
   function parseCSV(text) {
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     if (!lines.length) return [];
@@ -406,62 +457,22 @@
     return result;
   }
 
-  function renderMarksTable() {
-    if (!students.length) {
-      marksTableContainer.innerHTML = "";
-      marksTableContainer.classList.add("hidden");
-      noStudentsDiv.classList.remove("hidden");
-      return;
-    }
+  function buildStudentIdPrefix() {
+    const a = currentAssignment;
+    const batch = a.batch || "NA";
+    return `${batch}_${a.reg}_${a.branch}_${a.year}_${a.sem}_${a.subjectCode}_${a.section || "ALL"}`;
+  }
 
-    const allColumns = [...fixedColumns, ...dynamicColumns];
-
-    let html = '<table id="marks-table" class="min-w-full text-[11px] border-collapse">';
-    html += "<thead><tr>";
-    allColumns.forEach((c, i) => {
-      const extra = i < 4 ? "sticky-col" : "";
-      html += `<th class="border border-slate-300 px-2 py-1 bg-slate-100 text-xs font-semibold ${extra}">${c}</th>`;
-    });
-    html += "</tr></thead><tbody>";
-
-    students.forEach((stu, rowIndex) => {
-      html += "<tr>";
-      allColumns.forEach((colName, colIndex) => {
-        let cellHtml = "";
-        if (colName === "S.No") {
-          cellHtml = rowIndex + 1;
-        } else if (colName === "Hall Ticket No") {
-          cellHtml = stu.hallticket;
-        } else if (colName === "Name of the Student") {
-          cellHtml = stu.name;
-        } else if (colName === "Section") {
-          cellHtml = stu.section || "";
-        } else {
-          const key = colName;
-          const value = (stu.marks && stu.marks[key] !== undefined) ? stu.marks[key] : "";
-          const inputType = key.toLowerCase().includes("remark") ? "text" : "number";
-          cellHtml = `<input type="${inputType}" data-row="${rowIndex}" data-col="${encodeURIComponent(
-            key
-          )}" value="${value}" class="w-full border border-slate-200 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-400" />`;
-        }
-
-        const extraTd = colIndex < 4 ? "sticky-col bg-white" : "";
-        html += `<td class="border border-slate-200 px-2 py-1 ${extraTd}">${cellHtml}</td>`;
-      });
-      html += "</tr>";
-    });
-
-    html += "</tbody></table>";
-    marksTableContainer.innerHTML = html;
-    noStudentsDiv.classList.add("hidden");
-    marksTableContainer.classList.remove("hidden");
+  function buildStudentDocId(hallticket) {
+    return buildStudentIdPrefix() + "_" + hallticket;
   }
 
   async function loadExistingMarksIntoStudents() {
     if (!currentAssignment || !students.length) return;
 
-    // query all marks for this subject/batch/section
     const keyPrefix = buildStudentIdPrefix();
+
+    // per-student marks
     const qRef = query(
       collection(db, "marks_student"),
       where("compositeKeyPrefix", "==", keyPrefix)
@@ -480,19 +491,279 @@
         stu.marks = m.marks;
       }
     });
+
+    // sheet doc for lock flag
+    const sheetSnap = await getDoc(doc(db, "marksheets", keyPrefix));
+    if (sheetSnap.exists()) {
+      const s = sheetSnap.data();
+      isLocked = !!s.locked;
+    } else {
+      isLocked = false;
+    }
   }
 
-  function buildStudentIdPrefix() {
-    const a = currentAssignment;
-    const batch = a.batch || "NA";
-    return `${batch}_${a.reg}_${a.branch}_${a.year}_${a.sem}_${a.subjectCode}_${a.section || "ALL"}`;
+  function getMaxFromColumnName(colName) {
+    const m = colName.match(/(\d+)\s*Marks?/i);
+    if (!m) return null;
+    return parseInt(m[1], 10);
   }
 
-  function buildStudentDocId(hallticket) {
-    return buildStudentIdPrefix() + "_" + hallticket;
+  function renderMarksTable() {
+    if (!students.length) {
+      marksTableContainer.innerHTML = "";
+      marksTableContainer.classList.add("hidden");
+      noStudentsDiv.classList.remove("hidden");
+      return;
+    }
+
+    const allColumns = [...fixedColumns, ...dynamicColumns];
+
+    let html = '<table id="marks-table" class="min-w-full text-[11px] border-collapse">';
+    html += "<thead><tr>";
+    allColumns.forEach((c, i) => {
+      const extra = i < 2 ? "sticky-col" : ""; // freeze first 2
+      html += `<th class="border border-slate-300 px-2 py-1 bg-slate-100 text-xs font-semibold ${extra}">${c}</th>`;
+    });
+    html += "</tr></thead><tbody>";
+
+    students.forEach((stu, rowIndex) => {
+      html += "<tr>";
+      allColumns.forEach((colName, colIndex) => {
+        let cellHtml = "";
+        if (colName === "S.No") {
+          cellHtml = rowIndex + 1;
+        } else if (colName === "Hall Ticket No") {
+          cellHtml = stu.hallticket;
+        } else if (colName === "Name of the Student") {
+          cellHtml = stu.name;
+        } else if (colName === "Section") {
+          cellHtml = stu.section || "";
+        } else {
+          const key = colName;
+          const existing = stu.marks && stu.marks[key] !== undefined ? stu.marks[key] : "";
+          const isRemarksNumeric = key === "Remarks (Numeric)";
+          const isRemarksWords = key === "Remarks (In Words)";
+          const isDescriptive = key === "Descriptive 15 Marks";
+          const isTotal = key === "Total (40)";
+          const isNumericField = !isRemarksNumeric && !isRemarksWords;
+
+          const typeAttr = isNumericField ? "number" : "text";
+          const readOnlyAttr = (isDescriptive || isTotal) ? "readonly" : "";
+          const disabledAttr = isLocked ? "disabled" : "";
+
+          cellHtml = `<input type="${typeAttr}" data-row="${rowIndex}" data-col="${encodeURIComponent(
+            key
+          )}" value="${existing}" ${readOnlyAttr} ${disabledAttr}
+            class="w-full border border-slate-200 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-400" />`;
+        }
+
+        const extraTd = colIndex < 2 ? "sticky-col bg-white" : "";
+        html += `<td class="border border-slate-200 px-2 py-1 ${extraTd}">${cellHtml}</td>`;
+      });
+      html += "</tr>";
+    });
+
+    html += "</tbody></table>";
+    marksTableContainer.innerHTML = html;
+    noStudentsDiv.classList.add("hidden");
+    marksTableContainer.classList.remove("hidden");
+
+    applyStylesToAllInputs();
+    applyLockState();
   }
 
-  // ---------- Events: Load students ----------
+  function applyLockState() {
+    if (!marksTableContainer) return;
+    const inputs = marksTableContainer.querySelectorAll("input[data-row][data-col]");
+    inputs.forEach((inp) => {
+      if (isLocked) inp.setAttribute("disabled", "disabled");
+      else inp.removeAttribute("disabled");
+    });
+    if (isLocked) {
+      wsLockedBadge.classList.remove("hidden");
+      saveMarksBtn.disabled = true;
+      lockMarksBtn.disabled = true;
+      saveStatus.textContent = "Marks are locked as final.";
+    } else {
+      wsLockedBadge.classList.add("hidden");
+      saveMarksBtn.disabled = false;
+      lockMarksBtn.disabled = false;
+    }
+  }
+
+  function recomputeRow(rowIndex) {
+    const table = marksTableContainer.querySelector("#marks-table");
+    if (!table) return;
+    const rows = table.querySelectorAll("tbody tr");
+    const row = rows[rowIndex];
+    if (!row) return;
+
+    row.classList.remove("row-absent");
+
+    const inputs = row.querySelectorAll('input[data-row][data-col]');
+    const colInfo = {};
+    let rowAbsent = false;
+
+    inputs.forEach((input) => {
+      const colName = decodeURIComponent(input.dataset.col);
+      let raw = input.value.trim();
+      let num = null;
+
+      // sanitize: allow blank, -1, or number
+      if (raw === "") {
+        num = null;
+      } else if (raw === "-1") {
+        num = -1;
+        rowAbsent = true;
+      } else {
+        const n = Number(raw);
+        if (Number.isNaN(n) || n < 0) {
+          input.value = "";
+          raw = "";
+          num = null;
+        } else {
+          num = n;
+        }
+      }
+
+      const td = input.closest("td");
+      if (td) {
+        td.classList.remove("cell-error","cell-absent");
+      }
+
+      colInfo[colName] = { input, raw, num, td };
+    });
+
+    // mark cell-level errors/absentees
+    Object.keys(colInfo).forEach((name) => {
+      const { num, td } = colInfo[name];
+      if (!td) return;
+      if (num === -1) {
+        td.classList.add("cell-absent");
+      } else if (num != null) {
+        const max = getMaxFromColumnName(name);
+        if (max != null && num > max) {
+          td.classList.add("cell-error");
+        }
+      }
+    });
+
+    // compute best-4 descriptive from question pairs
+    const qMarks = [];
+    for (let q = 1; q <= 6; q++) {
+      const aKey = `${q}a`;
+      const bKey = `${q}b`;
+      const a = colInfo[aKey];
+      const b = colInfo[bKey];
+      if (!a || !b) continue;
+
+      if (a.num === -1 || b.num === -1) {
+        rowAbsent = true;
+      }
+
+      const av = (a.num != null && a.num > 0) ? a.num : 0;
+      const bv = (b.num != null && b.num > 0) ? b.num : 0;
+
+      if (!rowAbsent) {
+        qMarks.push(av + bv);
+      }
+    }
+
+    const descLabel = "Descriptive 15 Marks";
+    const partALabel = "Part-A Objective (10 Marks)";
+    const partCLabel = "Part-C (5 Marks)";
+    const totalLabel = "Total (40)";
+
+    const descCell = colInfo[descLabel];
+    const partACell = colInfo[partALabel];
+    const partCCell = colInfo[partCLabel];
+    const totalCell = colInfo[totalLabel];
+
+    if (descCell) {
+      const { input, td } = descCell;
+      td.classList.remove("cell-error","cell-absent");
+      if (rowAbsent) {
+        input.value = "-1";
+        td.classList.add("cell-absent");
+      } else {
+        let sum = 0;
+        if (qMarks.length) {
+          const sorted = [...qMarks].sort((a,b)=>b-a);
+          const best = sorted.slice(0,4);
+          sum = best.reduce((s,v)=>s+v,0);
+        }
+        if (sum === 0) {
+          input.value = "";
+        } else {
+          const capped = Math.min(sum, 15);
+          input.value = String(capped);
+        }
+      }
+      descCell.raw = input.value.trim();
+      descCell.num = descCell.raw === "" ? null : (descCell.raw === "-1" ? -1 : Number(descCell.raw));
+      if (descCell.num === -1) rowAbsent = true;
+    }
+
+    // recompute total
+    if (totalCell) {
+      const { input, td } = totalCell;
+      td.classList.remove("cell-error","cell-absent");
+
+      if (rowAbsent) {
+        input.value = "-1";
+        td.classList.add("cell-absent");
+        row.classList.add("row-absent");
+        return;
+      }
+
+      const pA = partACell && partACell.num != null && partACell.num > 0 ? partACell.num : 0;
+      const pC = partCCell && partCCell.num != null && partCCell.num > 0 ? partCCell.num : 0;
+      const dN = descCell && descCell.num != null && descCell.num > 0 ? descCell.num : 0;
+
+      let tot = pA + pC + dN;
+      if (tot === 0) {
+        input.value = "";
+      } else {
+        const capped = Math.min(tot, 40);
+        input.value = String(capped);
+        if (capped > 40) td.classList.add("cell-error");
+      }
+    }
+
+    if (rowAbsent) {
+      row.classList.add("row-absent");
+    }
+  }
+
+  function applyStylesToAllInputs() {
+    const table = marksTableContainer.querySelector("#marks-table");
+    if (!table) return;
+    const rows = table.querySelectorAll("tbody tr");
+    rows.forEach((_, idx) => recomputeRow(idx));
+  }
+
+  // live input handler
+  marksTableContainer.addEventListener("input", (e) => {
+    const input = e.target;
+    if (!input.matches('input[data-row][data-col]')) return;
+    if (isLocked) return;
+
+    // sanitize just this input
+    let raw = input.value.trim();
+    if (raw === "") {
+      input.value = "";
+    } else if (raw === "-1") {
+      // ok
+    } else {
+      const n = Number(raw);
+      if (Number.isNaN(n) || n < 0) {
+        input.value = "";
+      }
+    }
+    applyStylesToAllInputs();
+  });
+
+  // ---------- load students ----------
   loadStudentsBtn.addEventListener("click", async () => {
     if (!currentAssignment) {
       showError("Select a subject first.");
@@ -552,7 +823,7 @@
     const csv = rows.map((r) =>
       r
         .map((cell) =>
-          /[",\n]/.test(cell) ? '"' + cell.replace(/"/g, '""') + '"' : cell
+          /[\",\n]/.test(cell) ? '"' + cell.replace(/"/g, '""') + '"' : cell
         )
         .join(",")
     ).join("\n");
@@ -622,7 +893,6 @@
   // ---------- Save Marks ----------
   function collectMarksFromTable() {
     const inputs = marksTableContainer.querySelectorAll("input[data-row][data-col]");
-    // reset marks
     students.forEach((s) => (s.marks = {}));
 
     inputs.forEach((input) => {
@@ -634,13 +904,21 @@
     });
   }
 
-  saveMarksBtn.addEventListener("click", async () => {
+  async function saveMarksCore(silent = false) {
     if (!currentAssignment) {
       showError("Select a subject first.");
       return;
     }
     if (!students.length) {
       showError("No students loaded.");
+      return;
+    }
+
+    // do not save if any validation errors
+    const errorCells = marksTableContainer.querySelectorAll(".cell-error");
+    if (errorCells.length > 0) {
+      showError("Some marks exceed the maximum allowed (10 / 15 / 40 etc.). Fix red-highlighted cells before saving.");
+      saveStatus.textContent = "Fix validation errors before saving.";
       return;
     }
 
@@ -659,10 +937,11 @@
       return row;
     });
 
-    saveStatus.textContent = "Saving marks to Firestore…";
+    if (!silent) {
+      saveStatus.textContent = "Saving marks to Firestore…";
+    }
 
     try {
-      // per-student docs
       const writes = students.map((stu) => {
         const data = {
           compositeKeyPrefix: prefix,
@@ -690,8 +969,7 @@
 
       await Promise.all(writes);
 
-      // single sheet doc
-      const sheetId = prefix; // without hallticket
+      const sheetId = prefix;
       const sheetDoc = {
         compositeKeyPrefix: prefix,
         batch: meta.batch || "",
@@ -709,11 +987,54 @@
       };
       await setDoc(doc(db, "marksheets", sheetId), sheetDoc, { merge: true });
 
-      saveStatus.textContent = "Marks saved successfully.";
+      if (!silent) {
+        saveStatus.textContent = "Marks saved successfully.";
+      }
     } catch (err) {
       console.error(err);
       showError("Failed to save marks: " + err.message);
       saveStatus.textContent = "Error saving marks.";
+    }
+  }
+
+  saveMarksBtn.addEventListener("click", () => {
+    if (isLocked) {
+      showError("Marks are locked as final. You cannot edit.");
+      return;
+    }
+    saveMarksCore(false);
+  });
+
+  lockMarksBtn.addEventListener("click", async () => {
+    if (!currentAssignment) {
+      showError("Select a subject first.");
+      return;
+    }
+    if (!students.length) {
+      showError("No students loaded.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to submit final marks and lock this sheet? You will not be able to edit after this.")) {
+      return;
+    }
+
+    await saveMarksCore(false);
+
+    const prefix = buildStudentIdPrefix();
+    try {
+      await setDoc(
+        doc(db, "marksheets", prefix),
+        {
+          locked: true,
+          lockedBy: currentUser ? currentUser.uid : null,
+          lockedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+      isLocked = true;
+      applyLockState();
+    } catch (err) {
+      showError("Failed to lock marks: " + err.message);
     }
   });
 
@@ -733,7 +1054,6 @@
       if (role === "FACULTY") {
         roleBadge.classList.remove("hidden");
       } else if (role === "ADMIN") {
-        // Optional: allow admin to view faculty dashboard, or redirect.
         window.location.href = "admin.html";
         return;
       } else {
