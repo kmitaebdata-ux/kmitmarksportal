@@ -38,8 +38,32 @@ auth.onAuthStateChanged(async (user) => {
 
   try {
     // Check role from "roles" collection
-    const roleDoc = await db.collection("roles").doc(user.uid).get();
-    const role = roleDoc.exists ? (roleDoc.data().role || "").toUpperCase() : "";
+    // AUTO-CREATE ADMIN ROLE IF MISSING
+const roleRef = db.collection("roles").doc(user.uid);
+let roleSnap = await roleRef.get();
+
+if (!roleSnap.exists) {
+  console.warn("No role found — creating ADMIN role automatically.");
+  await roleRef.set({
+    role: "ADMIN",
+    email: user.email || "",
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  roleSnap = await roleRef.get();
+}
+
+const role = (roleSnap.data().role || "").toUpperCase();
+adminRoleEl.textContent = `Role: ${role}`;
+
+if (role !== "ADMIN") {
+  topNotice.textContent = "Access denied: You are not an ADMIN.";
+  contentArea.innerHTML = `
+    <div class="p-4 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+      Your account does not have admin privileges.
+    </div>`;
+  return;
+}
+
     adminRoleEl.textContent = `Role: ${role || "UNKNOWN"}`;
 
     if (role !== "ADMIN") {
