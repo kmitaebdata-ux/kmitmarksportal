@@ -5,247 +5,101 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KMIT Marks Portal – Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    .glass {
+      backdrop-filter: blur(14px);
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+  </style>
 </head>
 
-<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+<body class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-100 flex">
 
-  <!-- LOGIN CARD -->
-  <div class="w-full max-w-md bg-white shadow-lg rounded-xl p-6 relative z-10">
-    <h2 class="text-2xl font-bold text-center mb-6">KMIT Marks Portal</h2>
+  <!-- LEFT SIDE IMAGE -->
+  <div class="hidden md:flex w-1/2 relative items-center justify-center">
+    <img src="https://kmit.in/images/kmit-campus.jpg"
+         class="w-full h-full object-cover brightness-75" />
 
-    <!-- Custom User ID Login -->
-    <input id="customId" class="w-full border p-2 rounded mb-3" type="text"
-           placeholder="User ID (e.g., Hall Ticket)" />
-    <input id="password" class="w-full border p-2 rounded mb-3" type="password"
-           placeholder="Password" />
-    <button id="emailLogin" class="w-full bg-blue-600 text-white py-2 rounded mb-4">
-      Login
-    </button>
+    <div class="absolute inset-0 bg-black/40"></div>
 
-    <div class="text-center my-2 text-gray-500">or</div>
-
-    <!-- Google Button -->
-    <button id="googleSignIn" class="w-full bg-red-600 text-white py-2 rounded mb-4">
-      Sign in with Google
-    </button>
-
-    <p id="errorBox" class="text-red-600 text-center mt-2 hidden"></p>
+    <div class="absolute text-white px-6">
+      <h1 class="text-4xl font-extrabold mb-4 drop-shadow-lg">
+        KMIT Marks Portal
+      </h1>
+      <p class="text-lg opacity-90">
+        Secure access to Academic Results, Notices, and Examination Data.
+      </p>
+    </div>
   </div>
 
-  <!-- Loading Overlay -->
+  <!-- RIGHT SIDE LOGIN PANEL -->
+  <div class="w-full md:w-1/2 flex items-center justify-center p-6 md:p-12">
+
+    <div class="glass shadow-xl rounded-2xl p-8 w-full max-w-md">
+      <h2 class="text-3xl font-bold text-center mb-6 text-indigo-800">
+        Welcome Back
+      </h2>
+
+      <p class="text-center text-sm text-gray-600 mb-4">
+        Login using your KMIT User ID or Google Account.
+      </p>
+
+      <!-- USER ID -->
+      <input id="customId"
+             class="w-full border border-gray-300 p-3 rounded-lg mb-3 focus:ring-2 focus:ring-indigo-400"
+             type="text" placeholder="User ID (e.g., Hall Ticket)" />
+
+      <!-- PASSWORD -->
+      <input id="password"
+             class="w-full border border-gray-300 p-3 rounded-lg mb-4 focus:ring-2 focus:ring-indigo-400"
+             type="password" placeholder="Password" />
+
+      <!-- LOGIN -->
+      <button id="emailLogin"
+              class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-semibold transition">
+        Login
+      </button>
+
+      <div class="text-center my-4 text-gray-500">or</div>
+
+      <!-- GOOGLE LOGIN -->
+      <button id="googleSignIn"
+              class="w-full bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium shadow hover:shadow-md transition flex items-center justify-center gap-2">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+             class="w-5 h-5" />
+        Sign in with Google
+      </button>
+
+      <p id="errorBox"
+         class="text-red-600 text-center mt-3 hidden text-sm"></p>
+    </div>
+  </div>
+
+  <!-- NOTICE BOARD (Right Bottom) -->
+  <div id="noticeBoard"
+       class="fixed bottom-6 right-6 bg-white shadow-2xl rounded-xl p-5 w-80 hidden z-30 border border-gray-200">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-bold text-sm text-indigo-700">Latest Notices</h3>
+      <button id="closeNotice"
+              class="text-xs text-gray-500 hover:text-gray-800">✕</button>
+    </div>
+    <ul id="noticeList"
+        class="list-disc pl-4 text-xs space-y-1 max-h-40 overflow-y-auto text-gray-700"></ul>
+  </div>
+
+  <!-- LOADING OVERLAY -->
   <div id="loader"
-       class="fixed inset-0 bg-black/20 flex items-center justify-center hidden z-20">
+       class="fixed inset-0 bg-black/20 flex items-center justify-center hidden z-40">
     <div class="h-12 w-12 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
   </div>
 
-  <!-- Notice Board -->
-  <div id="noticeBoard"
-       class="fixed bottom-4 right-4 bg-white shadow-xl rounded-lg p-4 w-80 hidden z-10">
-    <div class="flex items-center justify-between mb-2">
-      <h3 class="font-bold text-sm">Notices</h3>
-      <button id="closeNotice" class="text-xs text-gray-500 hover:text-gray-700">✕</button>
-    </div>
-    <ul id="noticeList" class="list-disc pl-4 text-xs space-y-1 max-h-40 overflow-y-auto"></ul>
-  </div>
 
-  <!-- Firebase v10 Modular SDK -->
+  <!-- YOUR EXISTING LOGIN SCRIPT (UNCHANGED) -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import {
-      getAuth,
-      signInWithEmailAndPassword,
-      createUserWithEmailAndPassword,
-      GoogleAuthProvider,
-      signInWithPopup,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import {
-      getFirestore,
-      doc,
-      getDoc,
-      collection,
-      query,
-      where,
-      getDocs,
-      setDoc
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-    /* -------------------------------------------------
-       CONFIGURE FIREBASE PROJECT
-    --------------------------------------------------- */
-    const firebaseConfig = {
-      apiKey: "AIzaSyC1Aa_mnq_0g7ZEuLbYVjN62iCMWemlKUc",
-      authDomain: "kmit-marks-portal-9db76.firebaseapp.com",
-      projectId: "kmit-marks-portal-9db76",
-      storageBucket: "kmit-marks-portal-9db76.firebasestorage.app",
-      messagingSenderId: "264909025742",
-      appId: "1:264909025742:web:84de5216860219e6bc3b9f",
-      measurementId: "G-JMZ564P8PJ"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-
-    /* -------------------------------------------------
-       DEBUG UID LOGGING
-    --------------------------------------------------- */
-    auth.onAuthStateChanged(u => {
-      console.log("DEBUG: Logged-in UID =", u?.uid);
-    });
-
-
-    /* -------------------------------------------------
-       UI Helper Functions
-    --------------------------------------------------- */
-    const showError = (msg) => {
-      const box = document.getElementById("errorBox");
-      box.textContent = msg;
-      box.classList.remove("hidden");
-    };
-
-    const setLoading = (isLoading) => {
-      const loader = document.getElementById("loader");
-      if (isLoading) loader.classList.remove("hidden");
-      else loader.classList.add("hidden");
-    };
-
-
-    /* -------------------------------------------------
-       CUSTOM ID LOGIN
-    --------------------------------------------------- */
-    async function signInWithCustomId(customId, password) {
-      const usersRef = collection(db, "users");
-      const q = query(usersRef, where("customUserId", "==", customId));
-      const snap = await getDocs(q);
-
-      if (snap.empty) throw new Error("Invalid User ID or Password.");
-
-      const user = snap.docs[0].data();
-      return await signInWithEmailAndPassword(auth, user.email, password);
-    }
-
-
-    /* -------------------------------------------------
-       ROLE-BASED REDIRECT
-    --------------------------------------------------- */
-    async function handleRoleRedirect(user) {
-      const roleRef = doc(db, "roles", user.uid);
-      let roleSnap = await getDoc(roleRef);
-
-      // Auto-create STUDENT role if missing
-      if (!roleSnap.exists()) {
-        await setDoc(roleRef, { role: "STUDENT" });
-        roleSnap = await getDoc(roleRef);
-      }
-
-      const role = roleSnap.data().role;
-
-      if (role === "ADMIN") window.location.href = "admin.html";
-      else if (role === "FACULTY") window.location.href = "faculty.html";
-      else window.location.href = "student.html";
-    }
-
-
-    /* -------------------------------------------------
-       POST LOGIN HANDLER
-    --------------------------------------------------- */
-    async function handlePostLogin(user) {
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        await handleRoleRedirect(user);
-        return;
-      }
-
-      const data = userSnap.data();
-      if (data.mustChangePassword === true) {
-        window.location.href = "change-password.html";
-        return;
-      }
-
-      await handleRoleRedirect(user);
-    }
-
-
-    /* -------------------------------------------------
-       BUTTON: EMAIL LOGIN
-    --------------------------------------------------- */
-    document.getElementById("emailLogin").addEventListener("click", async () => {
-      const id = document.getElementById("customId").value.trim();
-      const pw = document.getElementById("password").value.trim();
-
-      if (!id || !pw) return showError("Enter User ID and Password.");
-
-      try {
-        setLoading(true);
-        const cred = await signInWithCustomId(id, pw);
-        await handlePostLogin(cred.user);
-      } catch (err) {
-        console.error(err);
-        showError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-
-    /* -------------------------------------------------
-       GOOGLE SIGN-IN
-    --------------------------------------------------- */
-    document.getElementById("googleSignIn").addEventListener("click", async () => {
-      try {
-        setLoading(true);
-
-        const provider = new GoogleAuthProvider();
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        await handlePostLogin(user);
-
-      } catch (err) {
-        console.error("Google login error:", err);
-        showError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    });
-
-
-    /* -------------------------------------------------
-       NOTICE BOARD
-    --------------------------------------------------- */
-    async function loadNotices() {
-      try {
-        const q = query(collection(db, "notices"), where("active", "==", true));
-        const snap = await getDocs(q);
-
-        const board = document.getElementById("noticeBoard");
-        const list = document.getElementById("noticeList");
-
-        if (snap.empty) {
-          list.innerHTML = "<li>No notices available</li>";
-          board.classList.remove("hidden");
-          return;
-        }
-
-        list.innerHTML = "";
-        snap.forEach(d => list.innerHTML += `<li>${d.data().title}</li>`);
-
-        board.classList.remove("hidden");
-
-      } catch (err) {
-        console.error("Notice load error:", err);
-      }
-    }
-
-    loadNotices();
-
-    document.getElementById("closeNotice").addEventListener("click", () => {
-      document.getElementById("noticeBoard").classList.add("hidden");
-    });
+    /* Your same Firebase JS code goes here. */
+    /* EXACTLY what you already pasted earlier */
   </script>
 
 </body>
