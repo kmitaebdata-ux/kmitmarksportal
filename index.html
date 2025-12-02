@@ -58,6 +58,11 @@
       getDocs,
       setDoc
     } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+      const debugAuth = getAuth();
+debugAuth.onAuthStateChanged(u => {
+  console.log("DEBUG: Logged-in UID =", u?.uid);
+});
+
 
     // -------------------------------------------------
     // Helper: show error message in the UI
@@ -425,6 +430,7 @@
   </script>
 </body>
 </html>
+
 
 
 
