@@ -39,6 +39,11 @@
 
   <!-- Firebase v10 Modular SDK -->
   <script type="module">
+      const debugAuth = getAuth();
+debugAuth.onAuthStateChanged(u => {
+  console.log("DEBUG: Logged-in UID =", u?.uid);
+});
+
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import {
       getAuth,
@@ -430,6 +435,7 @@ debugAuth.onAuthStateChanged(u => {
   </script>
 </body>
 </html>
+
 
 
 
