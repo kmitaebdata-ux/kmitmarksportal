@@ -112,10 +112,196 @@
     <div class="h-12 w-12 border-4 border-indigo-200 border-t-transparent rounded-full animate-spin"></div>
   </div>
 
-  <!-- Your existing Firebase v10 login script -->
+  <!-- LOGIN + GOOGLE SIGN-IN LOGIC -->
   <script type="module">
-    // paste your existing index.html <script type="module"> code here unchanged
-    // (Firebase config, signInWithCustomId, handlePostLogin, loadNotices, etc.)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      signInWithPopup,
+      signInWithEmailAndPassword,
+      signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      collection,
+      query,
+      where,
+      getDocs,
+      setDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    /* -------------------------------------------------
+       Firebase Config
+    --------------------------------------------------- */
+    const firebaseConfig = {
+      apiKey: "AIzaSyC1Aa_mnq_0g7ZEuLbYVjN62iCMWemlKUc",
+      authDomain: "kmit-marks-portal-9db76.firebaseapp.com",
+      projectId: "kmit-marks-portal-9db76",
+      storageBucket: "kmit-marks-portal-9db76.firebasestorage.app",
+      messagingSenderId: "264909025742",
+      appId: "1:264909025742:web:84de5216860219e6bc3b9f",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    /* -------------------------------------------------
+       UI Helpers
+    --------------------------------------------------- */
+    const showError = (msg) => {
+      const box = document.getElementById("errorBox");
+      box.textContent = msg;
+      box.classList.remove("hidden");
+    };
+
+    const setLoading = (v) => {
+      const loader = document.getElementById("loader");
+      v ? loader.classList.remove("hidden") : loader.classList.add("hidden");
+    };
+
+    /* -------------------------------------------------
+       Custom ID Login (UserID + Password)
+       users collection: { customUserId, email, ... }
+    --------------------------------------------------- */
+    async function signInWithCustomId(customId, password) {
+      const ref = collection(db, "users");
+      const q = query(ref, where("customUserId", "==", customId));
+      const snap = await getDocs(q);
+
+      if (snap.empty) throw new Error("Invalid User ID or Password.");
+
+      const email = snap.docs[0].data().email;
+      if (!email) throw new Error("No email mapped for this User ID.");
+
+      return await signInWithEmailAndPassword(auth, email, password);
+    }
+
+    /* -------------------------------------------------
+       Role-based Redirect
+       roles collection: { role: "ADMIN" | "FACULTY" | "STUDENT" }
+    --------------------------------------------------- */
+    async function handleRoleRedirect(user) {
+      const roleRef = doc(db, "roles", user.uid);
+      let roleSnap = await getDoc(roleRef);
+
+      // Auto-create STUDENT role if missing
+      if (!roleSnap.exists()) {
+        await setDoc(roleRef, { role: "STUDENT" });
+        roleSnap = await getDoc(roleRef);
+      }
+
+      const role = roleSnap.data().role;
+
+      if (role === "ADMIN") window.location.href = "admin.html";
+      else if (role === "FACULTY") window.location.href = "faculty.html";
+      else window.location.href = "student.html";
+    }
+
+    /* -------------------------------------------------
+       Post-login Handler (optional mustChangePassword)
+       users collection: { mustChangePassword: true/false }
+    --------------------------------------------------- */
+    async function handlePostLogin(user) {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          if (data.mustChangePassword === true) {
+            window.location.href = "change-password.html";
+            return;
+          }
+        }
+
+        await handleRoleRedirect(user);
+      } catch (err) {
+        console.error("Post login error:", err);
+        await handleRoleRedirect(user); // fallback
+      }
+    }
+
+    /* -------------------------------------------------
+       EMAIL LOGIN BUTTON
+    --------------------------------------------------- */
+    document.getElementById("emailLogin").addEventListener("click", async () => {
+      const uid = document.getElementById("customId").value.trim();
+      const pw = document.getElementById("password").value.trim();
+
+      if (!uid || !pw) {
+        showError("Enter User ID & Password.");
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const cred = await signInWithCustomId(uid, pw);
+        await handlePostLogin(cred.user);
+      } catch (err) {
+        console.error("Custom login error:", err);
+        showError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    /* -------------------------------------------------
+       GOOGLE SIGN-IN BUTTON
+    --------------------------------------------------- */
+    document.getElementById("googleSignIn").addEventListener("click", async () => {
+      try {
+        setLoading(true);
+        const result = await signInWithPopup(auth, provider);
+        await handlePostLogin(result.user);
+      } catch (err) {
+        console.error("Google Sign-In Error:", err);
+        showError("Google Sign-In failed: " + (err.message || "Unknown error"));
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    /* -------------------------------------------------
+       NOTICE BOARD
+       notices collection: { title, active, createdAt }
+    --------------------------------------------------- */
+    async function loadNotices() {
+      try {
+        const noticesRef = collection(db, "notices");
+        const qNotices = query(noticesRef, where("active", "==", true));
+        const snap = await getDocs(qNotices);
+
+        const board = document.getElementById("noticeBoard");
+        const list = document.getElementById("noticeList");
+
+        if (snap.empty) {
+          list.innerHTML = "<li>No notices available</li>";
+          board.classList.remove("hidden");
+          return;
+        }
+
+        list.innerHTML = "";
+        snap.forEach(docSnap => {
+          const n = docSnap.data();
+          list.innerHTML += `<li>${n.title || n.message || "Notice"}</li>`;
+        });
+
+        board.classList.remove("hidden");
+      } catch (err) {
+        console.error("Notice load error:", err);
+      }
+    }
+
+    loadNotices();
+
+    document.getElementById("closeNotice").addEventListener("click", () => {
+      document.getElementById("noticeBoard").classList.add("hidden");
+    });
   </script>
 </body>
 </html>
