@@ -5,110 +5,157 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>KMIT Marks Portal – Admin Dashboard</title>
 
+  <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
+
   <style>
-    .glass {
-      backdrop-filter: blur(18px);
-      background: rgba(15, 23, 42, 0.78);
-      border: 1px solid rgba(148, 163, 184, 0.5);
+    body {
+      background: #0b1120;
     }
-    <style>
-  .glass-heading {
-    color: #e5e7eb !important;  /* light gray */
-    font-weight: 600;
-    letter-spacing: 0.3px;
-  }
-</style>
- </style>
+
+    /* GLASS CARD */
+    .glass {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+    }
+
+    /* GLOBAL HEADING FIX */
+    h1, h2, h3, h4 {
+      color: #f1f5f9 !important;
+    }
+
+    /* PANEL CARD TEXT FIX */
+    .panel-card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      padding: 16px;
+      color: #e2e8f0;
+    }
+
+    /* INPUT STYLING */
+    .input {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f1f5f9;
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+    .input::placeholder { color: #94a3b8; }
+
+    /* BUTTONS */
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .btn-primary:hover { background: #60a5fa; }
+
+    .btn-upload {
+      background: #22c55e;
+      color: white;
+      padding: 8px 14px;
+      font-size: 13px;
+      border-radius: 10px;
+    }
+    .btn-upload:hover { background: #4ade80; }
+
+    /* SIDEBAR */
+    .sidebar {
+      background: #0f172a;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .nav-link {
+      color: #cbd5e1;
+      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+    }
+    .nav-link:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex text-slate-100">
+
+<body class="min-h-screen flex">
 
   <!-- SIDEBAR -->
-  <aside class="hidden lg:flex w-64 flex-col p-4 gap-4">
-    <div class="glass rounded-2xl px-4 py-3 flex items-center gap-3 shadow-lg">
-      <div class="h-10 w-10 rounded-xl bg-indigo-500 flex items-center justify-center text-xl">
-        🔐
-      </div>
-      <div class="text-xs">
-        <div class="font-semibold text-sm">KMIT Admin Panel</div>
-        <div class="text-slate-300">Marks & Users Management</div>
-      </div>
+  <aside class="w-64 sidebar text-gray-100 flex flex-col">
+    <div class="p-4 border-b border-slate-700">
+      <h1 class="text-xl font-bold text-slate-100">KMIT Admin Panel</h1>
+      <p class="text-xs text-slate-400">Marks & Users Management</p>
     </div>
 
-    <nav class="glass rounded-2xl flex-1 p-3 text-sm shadow-lg">
-      <div class="text-[11px] uppercase tracking-wide text-slate-400 px-2 mb-2">Dashboard</div>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="overview">
-        <span>📊</span><span>Overview</span>
-      </button>
+    <nav class="flex-1 overflow-y-auto p-2">
+      <ul class="space-y-1">
 
-      <div class="text-[11px] uppercase tracking-wide text-slate-400 px-2 mt-4 mb-1">Master Data</div>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="students">👨‍🎓 Students</button>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="faculty">👨‍🏫 Faculty</button>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="subjects">📚 Subjects</button>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="assignments">🧩 Faculty–Subject Map</button>
+        <li><button class="nav-link w-full text-left" data-page="overview">📊 Overview</button></li>
 
-      <div class="text-[11px] uppercase tracking-wide text-slate-400 px-2 mt-4 mb-1">Marks & Notices</div>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="marks">📝 Marks Management</button>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2 mb-1"
-              data-page="notices">📢 Notices</button>
+        <p class="text-[11px] text-slate-500 ml-3 mt-3">MASTER DATA</p>
 
-      <div class="text-[11px] uppercase tracking-wide text-slate-400 px-2 mt-4 mb-1">Security</div>
-      <button class="nav-link w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/40 flex items-center gap-2"
-              data-page="roles">🔐 Roles</button>
+        <li><button class="nav-link w-full text-left" data-page="students">👨‍🎓 Students</button></li>
+        <li><button class="nav-link w-full text-left" data-page="faculty">👨‍🏫 Faculty</button></li>
+        <li><button class="nav-link w-full text-left" data-page="subjects">📚 Subjects</button></li>
+        <li><button class="nav-link w-full text-left" data-page="assignments">🧩 Faculty–Subject Map</button></li>
+
+        <p class="text-[11px] text-slate-500 ml-3 mt-3">MARKS & NOTICES</p>
+
+        <li><button class="nav-link w-full text-left" data-page="marks">📝 Marks Management</button></li>
+        <li><button class="nav-link w-full text-left" data-page="notices">📢 Notices</button></li>
+
+        <p class="text-[11px] text-slate-500 ml-3 mt-3">SECURITY</p>
+
+        <li><button class="nav-link w-full text-left" data-page="roles">🔐 Roles</button></li>
+
+      </ul>
     </nav>
 
-    <div class="glass rounded-2xl p-3 flex items-center justify-between text-xs shadow-lg">
-      <div>
-        <div id="adminEmail" class="font-semibold truncate max-w-[130px]"></div>
-        <div id="adminRole" class="text-slate-300 text-[11px]">Role: Loading...</div>
+    <div class="p-4 border-t border-slate-700 flex items-center justify-between">
+      <div class="text-xs text-slate-300">
+        <div id="adminEmail" class="font-medium"></div>
+        <div id="adminRole"></div>
       </div>
-      <button id="logoutBtn"
-              class="text-[11px] px-3 py-1 rounded-full bg-red-500 hover:bg-red-600 text-white">
-        Logout
-      </button>
+      <button id="logoutBtn" class="px-3 py-1 rounded bg-red-500 text-xs">Logout</button>
     </div>
   </aside>
 
   <!-- MAIN CONTENT -->
-  <main class="flex-1 flex flex-col p-3 md:p-5 gap-3">
+  <main class="flex-1 flex flex-col">
 
     <!-- TOP BAR -->
-    <header class="glass rounded-2xl px-4 py-3 flex items-center justify-between shadow-lg">
+    <header class="glass h-16 flex items-center justify-between px-6 shadow">
       <div>
-        <h2 id="pageTitle" class="text-lg md:text-xl font-semibold">Overview</h2>
-        <p class="text-[11px] md:text-xs text-slate-300">
-          KMIT Marks Portal – Admin Dashboard
-        </p>
+        <h2 id="pageTitle" class="text-xl font-bold">Overview</h2>
+        <p class="text-xs text-slate-300">KMIT Marks Portal – Admin Dashboard</p>
       </div>
-      <div id="topNotice" class="text-[11px] text-red-300 font-semibold text-right"></div>
+      <div id="topNotice" class="text-red-400 text-xs font-semibold"></div>
     </header>
 
-    <!-- CONTENT AREA -->
-    <section id="contentArea"
-             class="glass rounded-2xl flex-1 p-4 md:p-5 overflow-y-auto text-sm shadow-xl">
-      <div class="text-slate-300">Loading admin dashboard...</div>
+    <!-- CONTENT -->
+    <section id="contentArea" class="p-6 text-sm text-slate-200">
+      Loading...
     </section>
 
-    <!-- FOOTER NOTICE TICKER -->
-    <footer class="glass rounded-2xl h-14 mt-2 px-4 flex items-center text-xs shadow-lg">
-      <div class="font-semibold mr-3 text-indigo-200">Notice Board</div>
-      <div id="noticeBoard" class="flex-1 overflow-x-auto whitespace-nowrap text-slate-200 text-[11px]"></div>
+    <!-- FOOTER NOTICE -->
+    <footer class="glass h-16 flex items-center px-6 text-xs text-slate-200">
+      <span class="mr-3 font-semibold">Notice Board:</span>
+      <div id="noticeBoard" class="overflow-x-auto whitespace-nowrap"></div>
     </footer>
+
   </main>
 
-  <!-- Firebase v8 compat CDN -->
+  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <!-- Your existing admin.js (the cleaned one we wrote) -->
+  <!-- Admin logic -->
   <script src="admin.js"></script>
+
 </body>
 </html>
-
