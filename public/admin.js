@@ -144,9 +144,9 @@ function loadPage(page) {
 }
 
 function formatTitle(page) {
-  return page.split(/[-_]/).map(function(w) {
-    return w.charAt(0).toUpperCase() + w.slice(1);
-  }).join(" ");
+  if (!page) return "";
+  var cleaned = page.toString().replace(/[-_]+/g, " ");
+  return cleaned.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
 }
 
 // ======================================================
@@ -183,9 +183,7 @@ function loadNoticeTicker() {
 // CSV HELPERS
 // ======================================================
 function parseCsv(text) {
-  var lines = text.split(/
-?
-/).filter(function(l) { return l.trim() !== ""; });
+  var lines = text.split(/\r?\n/).filter(function(l) { return l.trim() !== ""; });
   if (lines.length < 2) return [];
   var headers = lines[0].split(",").map(function(h) { return h.trim(); });
   var records = [];
