@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KMIT Marks Portal – Login</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    body {
+      background: #0b1120;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-family: system-ui;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 32px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(10px);
+      width: 350px;
+      text-align: center;
+    }
+    .btn-google {
+      background: white;
+      color: #333;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-google:hover {
+      background: #e9e9e9;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+    <h2 class="text-xl font-bold mb-4">KMIT Marks Portal</h2>
+    <p class="text-sm text-slate-300 mb-6">Admin Login</p>
+
+    <button id="googleLoginBtn" class="btn-google">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20">
+      Continue with Google
+    </button>
+
+    <p id="loginStatus" class="mt-4 text-xs text-red-300"></p>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup } 
+      from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc } 
+      from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC1Aa_mnq_0g7ZEuLbYVjN62iCMWemlKUc",
+      authDomain: "kmit-marks-portal-9db76.firebaseapp.com",
+      projectId: "kmit-marks-portal-9db76",
+      storageBucket: "kmit-marks-portal-9db76.firebasestorage.app",
+      messagingSenderId: "264909025742",
+      appId: "1:264909025742:web:84de5216860219e6bc3b9f"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db   = getFirestore(app);
+
+    const provider = new GoogleAuthProvider();
+
+    const loginBtn = document.getElementById("googleLoginBtn");
+    const loginStatus = document.getElementById("loginStatus");
+
+    loginBtn.addEventListener("click", async () => {
+      loginStatus.textContent = "Opening Google Sign-In…";
+
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+
+        loginStatus.textContent = "Checking admin access…";
+
+        const roleRef = doc(db, "roles", user.uid);
+        const snap = await getDoc(roleRef);
+
+        if (!snap.exists() || snap.data().role !== "ADMIN") {
+          loginStatus.textContent =
+            "You are not an authorized admin. Contact Exam Branch.";
+          return;
+        }
+
+        // Success → redirect to admin panel
+        window.location.href = "admin.html";
+
+      } catch (err) {
+        console.error("Google login error:", err);
+        loginStatus.textContent = "Google Sign-In failed. Please try again.";
+      }
+    });
+  </script>
+
+</body>
+</html>
