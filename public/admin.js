@@ -37,51 +37,45 @@ var cancelPurgeBtn  = document.getElementById('cancelPurgeBtn');
 var confirmPurgeBtn = document.getElementById('confirmPurgeBtn');
 
 // ======================================================
-// AUTH GUARD + ROLE CHECK
+// AUTH GUARD + ROLE CHECK (SECURE)
 // ======================================================
 auth.onAuthStateChanged(function(user) {
   if (!user) {
-    alert("Session expired. Please login again.");
-    window.location.href = "index.html";
+    // Not logged in -> go to login page
+    window.location.href = "login.html";
     return;
   }
 
   adminEmail.textContent = user.email || "(no email)";
 
-  db.collection("roles").doc(user.uid).get().then(function(roleSnap) {
-    if (!roleSnap.exists) {
-      console.warn("No role found – creating ADMIN role automatically for this user.");
-      return db.collection("roles").doc(user.uid).set({
-        role: "ADMIN",
-        email: user.email || "",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(function() {
-        return db.collection("roles").doc(user.uid).get();
-      });
-    }
-    return roleSnap;
-  }).then(function(roleSnap2) {
-    if (!roleSnap2) return;
-    var role = (roleSnap2.data().role || "").toUpperCase();
-    adminRoleEl.textContent = "Role: " + role;
+  db.collection("roles").doc(user.uid).get()
+    .then(function(roleSnap) {
+      if (!roleSnap.exists) {
+        console.warn("No role document for user – treating as NON-ADMIN.");
+        window.location.href = "unauthorized.html";
+        return;
+      }
 
-    if (role !== "ADMIN") {
-      topNotice.textContent = "Access denied: You are not an ADMIN.";
-      contentArea.innerHTML = "" +
-        "<div class=\"panel-card border border-red-400/40 bg-red-900/20 text-sm text-red-100\">" +
-        "Your account does not have admin privileges. Please contact Exam Branch." +
-        "</div>";
-      return;
-    }
+      var role = (roleSnap.data().role || "").toUpperCase();
+      adminRoleEl.textContent = "Role: " + role;
 
-    attachNavHandlers();
-    loadNoticeTicker();
-    loadPage("overview");
-  }).catch(function(err) {
-    console.error("Error checking admin role:", err);
-    alert("Error verifying admin access. Check console.");
-  });
+      if (role !== "ADMIN") {
+        // Logged in but not ADMIN → block access
+        window.location.href = "unauthorized.html";
+        return;
+      }
+
+      // ✅ Admin confirmed – enable panel
+      attachNavHandlers();
+      loadNoticeTicker();
+      loadPage("overview");
+    })
+    .catch(function(err) {
+      console.error("Error checking admin role:", err);
+      topNotice.textContent = "Error verifying admin access. Please contact Exam Branch.";
+    });
 });
+
 
 // ---------- LOGOUT ----------
 if (logoutBtn) {
@@ -224,8 +218,15 @@ function handleCsvUpload(opts) {
         return;
       }
 
-      msgEl.textContent = "Uploading " + records.length + " rows...";
-      var batchSize = 400;
+            // Basic safety: warn if file is too big (e.g., > 5 MB)
+      if (file.size > 5 * 1024 * 1024) {
+        msgEl.textContent = "File is large; upload may take time...";
+      } else {
+        msgEl.textContent = "Uploading " + records.length + " rows...";
+      }
+
+      // Slightly smaller batch for more reliable commits
+      var batchSize = 300;
       var processed = 0;
 
       function runBatch() {
