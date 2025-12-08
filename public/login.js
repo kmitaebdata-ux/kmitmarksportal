@@ -1,0 +1,3 @@
+<script type="module">
+   ... firebase login code ...
+</script>
