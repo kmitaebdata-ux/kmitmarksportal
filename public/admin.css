@@ -1,0 +1,60 @@
+/* admin.css – basic glassmorphism + helpers layered on top of Tailwind */
+
+/* Scrollbar tweak for better UX */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #64748b #020617;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.9);
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.9);
+  border-radius: 999px;
+}
+
+/* Panel card – reusable container */
+.panel-card {
+  @apply bg-slate-900/80 border border-slate-800/80 rounded-2xl shadow-lg p-4 md:p-5;
+}
+
+/* Inputs / selects / textareas */
+.input {
+  @apply bg-slate-900/70 border border-slate-700/80 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500;
+}
+
+/* Primary button */
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium shadow-sm border border-sky-500/60 transition text-xs;
+}
+
+/* Upload button */
+.btn-upload {
+  @apply inline-flex items-center justify-center rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-sm border border-emerald-500/60 px-3 py-1.5;
+}
+
+/* Notice marquee effect (simple CSS animation) */
+.marquee {
+  position: relative;
+  animation: marquee-scroll 18s linear infinite;
+}
+
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-30%);
+  }
+}
+
+/* Small utility for disabled button look if Tailwind disabled:opacity not applied */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

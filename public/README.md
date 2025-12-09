@@ -1,0 +1,1 @@
+# Next Admin (Placeholder)\n\nThis folder is reserved for the Next.js-based admin panel implementation.
